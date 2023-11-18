@@ -1,50 +1,53 @@
 import os
 import cv2
-import numpy as np
-import pickle
-from sklearn.metrics import classification_report
-
-# Constants
-IMAGE_SIZE = (24, 24)  # Standardizing images to 24x24 pixels
-DATA_DIR = 'training_test_data'  # Base directory for the data
-
-def load_images_from_folder(folder):
-    """
-    Load and preprocess images from a folder.
-    """
-    images = []
-    for filename in os.listdir(folder):
-        img_path = os.path.join(folder, filename)
-        if img_path.endswith('.bmp') or img_path.endswith('.jpg'):
-            img = cv2.imread(img_path, cv2.IMREAD_GRAYSCALE)
-            if img is not None:
-                img = cv2.resize(img, IMAGE_SIZE)
-                images.append(img)
-    return images
-
-def prepare_data(face_dir, non_face_dir):
-    """
-    Prepare the dataset by loading faces and non-faces.
-    """
-    faces = load_images_from_folder(face_dir)
-    non_faces = load_images_from_folder(non_face_dir)
-    data = faces + non_faces
-    labels = [1] * len(faces) + [0] * len(non_faces)
-    return np.array(data).reshape(len(data), -1), np.array(labels)
+import joblib
 
 # Load the trained model
-with open('face_detector_model.pkl', 'rb') as f:
-    model = pickle.load(f)
+model_filename = 'face_detection_model.joblib'
+ada_boost_classifier = joblib.load(model_filename)
 
-# Paths to test data
-test_face_dir = os.path.join(DATA_DIR, 'test_cropped_faces')
-test_non_face_dir = os.path.join(DATA_DIR, 'test_nonfaces')
+# Function to compute Haar-like features using OpenCV
+def compute_haar_features(image):
+    # Define the Haar cascade classifier (you can use pre-trained cascades or train your own)
+    face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
+    
+    # Detect faces in the image
+    faces = face_cascade.detectMultiScale(image, scaleFactor=1.1, minNeighbors=5, minSize=(30, 30))
+    
+    # Extract Haar-like features
+    features = []
+    for (x, y, w, h) in faces:
+        features.append([x, y, x + w, y + h])  # Rectangular region of detected face
+    
+    return features
 
-# Load and prepare test data
-X_test, y_test = prepare_data(test_face_dir, test_non_face_dir)
+# Directory containing JPG images for face detection
+test_image_dir = 'training_test_data/test_face_photos/'
 
-# Predict using the model
-y_pred = model.predict(X_test)
+# Output directory to save processed images with rectangles
+output_dir = 'output/'
 
-# Evaluate the model
-print(classification_report(y_test, y_pred))
+# Create the output directory if it doesn't exist
+os.makedirs(output_dir, exist_ok=True)
+
+# List all JPG files in the test directory
+test_jpg_files = [f for f in os.listdir(test_image_dir) if f.endswith('.jpg') or f.endswith('JPG')]
+
+# Iterate through JPG files in the test directory and apply face detection
+for jpg_file in test_jpg_files:
+    image_path = os.path.join(test_image_dir, jpg_file)
+    image = cv2.imread(image_path)
+    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    
+    # Detect faces using the loaded AdaBoost classifier
+    faces = compute_haar_features(gray)
+    
+    # Draw rectangles around detected faces
+    for (x, y, x2, y2) in faces:
+        cv2.rectangle(image, (x, y), (x2, y2), (0, 255, 0), 2)
+    
+    # Save the processed image in the output directory
+    output_path = os.path.join(output_dir, jpg_file)
+    cv2.imwrite(output_path, image)
+
+print("Processed images saved to the 'output' directory.")
