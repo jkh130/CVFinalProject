@@ -9,19 +9,19 @@ import joblib
 def compute_haar_features(image):
     # Define the Haar cascade classifier (you can use pre-trained cascades or train your own)
     face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
-    
+
     # Detect faces in the image
     faces = face_cascade.detectMultiScale(image, scaleFactor=1.1, minNeighbors=10, minSize=(40, 40))
-    
+
     # Extract Haar-like features
     features = []
     for (x, y, w, h) in faces:
         features.append([x, y, x + w, y + h])  # Rectangular region of detected face
-    
+
     return features
 
 # Directory containing BMP face images for training
-train_image_dir = 'training_test_data/training_faces/'
+train_image_dir = '../training_test_data/training_faces/'
 
 # List all BMP files in the training directory
 train_bmp_files = [f for f in os.listdir(train_image_dir) if f.endswith('.bmp')]
@@ -34,10 +34,10 @@ y_train = []
 for bmp_file in train_bmp_files:
     image_path = os.path.join(train_image_dir, bmp_file)
     image = cv2.imread(image_path, cv2.IMREAD_GRAYSCALE)
-    
+
     # Extract Haar-like features from the image
     features = compute_haar_features(image)
-    
+
     X_train.extend(features)
     y_train.extend([1] * len(features))  # Assuming all detected regions are faces
 
