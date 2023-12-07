@@ -51,17 +51,27 @@ class DecisionStump:
 
 # Function to compute Haar-like features using OpenCV
 def compute_haar_features(image):
-    face_cascade = cv2.CascadeClassifier(
-        cv2.data.haarcascades + "haarcascade_frontalface_default.xml"
-    )
-    multi_scale = face_cascade.detectMultiScale(
-        image, scaleFactor=1.2, minNeighbors=20, minSize=(30, 30)
-    )
-    faces = []
-    for x, y, w, h in multi_scale:
-        faces.append([x, y, x + w, y + h])
+    # Load the frontal and profile face classifiers
+    frontal_face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
+    profile_face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_profileface.xml')
 
-    return faces
+    # Detect frontal faces
+    frontal_faces = frontal_face_cascade.detectMultiScale(image, scaleFactor=1.1, minNeighbors=20, minSize=(10, 10))
+
+    # Detect profile faces
+    profile_faces = profile_face_cascade.detectMultiScale(image, scaleFactor=1.1, minNeighbors=20, minSize=(10, 10))
+
+    # Combine the results
+    if len(frontal_faces) == 0:
+        faces = profile_faces
+    elif len(profile_faces) == 0:
+        faces = frontal_faces
+    else:
+        faces = np.concatenate((frontal_faces, profile_faces), axis=0)
+
+    # Convert to desired format
+    features = [[x, y, x + w, y + h] for (x, y, w, h) in faces]
+    return features
 
 
 def load_data():
@@ -95,10 +105,10 @@ def load_data():
                 
                 # returns empty list
                 # x_train_nonface.extend(features)
-                subwindow_size = 90 
+                subwindow_size = 90
                 # replace with [row,col,row+LENGTH,col+LENGTH]?
                 x_train_nonface.append([0, 0, subwindow_size, subwindow_size])
-               
+
 
     # Combine face and non-face data
     x_train = x_train_face + x_train_nonface
