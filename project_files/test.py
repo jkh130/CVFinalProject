@@ -1,12 +1,12 @@
+# Import configuration variables
+from config import data_directory, training_directory, code_directory
+
 import os
 import cv2
-from matplotlib import pyplot as plt
 import numpy as np
-from  src.detect_skin import detect_skin
 import joblib
 import matplotlib
-matplotlib.use('TkAgg')  # or 'Agg', 'Qt5Agg', etc., depending on your environment
-import matplotlib.pyplot as plt
+matplotlib.use('TkAgg')  # Adjust as needed for your environment
 
 # Custom Decision Stump Classifier
 class DecisionStump:
@@ -19,9 +19,7 @@ class DecisionStump:
         feature_values = X[:, self.best_feature]
         return np.where(feature_values * self.best_rule < self.best_threshold * self.best_rule, 1, -1)
 
-
 def detect_skin_ycbcr(image):
-
     if image is None or not isinstance(image, np.ndarray):
         raise ValueError("Invalid image input")
 
@@ -33,17 +31,6 @@ def detect_skin_ycbcr(image):
     skin = cv2.bitwise_and(image, image, mask=skin_mask)
 
     return skin, skin_mask
-
-def detect_skin_hist(image):
-    
-    #lower score from detection means higher chance it is a face
-    #Does alright with these loaded values
-    # but these values are from images that were different
-    negative_histogram = np.load("data/negative_histogram.npy")
-    positive_histogram = np.load("data/positive_histogram.npy")
-    detection = detect_skin(image, positive_histogram, negative_histogram)
-    plt.imshow(detection)
-    plt.show()
 
 def compute_haar_features(image):
     face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
@@ -57,32 +44,46 @@ def adaboost_predict(classifiers, alpha_values, X):
     final_predictions = [sum(alpha * clf.predict(np.array([x])) for alpha, clf in zip(alpha_values, classifiers)) for x in X]
     return [1 if prediction > 0 else -1 for prediction in final_predictions]
 
-model_filename = 'face_detection_model.joblib'
-ada_boost_classifier = joblib.load(model_filename)
+# Assuming 'data' directory is at the same level as 'training_test_data'
+model_directory = os.path.join(os.path.dirname(data_directory), 'data')
+model_filename = os.path.join(model_directory, 'face_detection_model.joblib')
 
-test_image_dir = '../training_test_data/test_face_photos'
-output_dir = '../output/'
+output_dir = os.path.join(code_directory, 'output')
 os.makedirs(output_dir, exist_ok=True)
 
-test_jpg_files = [f for f in os.listdir(test_image_dir) if f.endswith('.jpg') or f.endswith('JPG')]
+# Paths to test images are directly inside 'training_test_data'
+test_image_dirs = ['test_cropped_faces', 'test_face_photos', 'test_nonfaces']
 
-for jpg_file in test_jpg_files:
-    image_path = os.path.join(test_image_dir, jpg_file)
-    image = cv2.imread(image_path)
+# Output directory (relative path)
+output_dir = 'output'
+os.makedirs(output_dir, exist_ok=True)
 
-    skin_detected, skin_mask = detect_skin_ycbcr(image)
-    gray_skin = cv2.cvtColor(skin_detected, cv2.COLOR_BGR2GRAY)
-    faces = compute_haar_features(gray_skin)
+# Load AdaBoost classifier
+ada_boost_classifier = joblib.load(model_filename)
 
-    X_test = np.array(faces, dtype=np.float32)
-    predictions = adaboost_predict(ada_boost_classifier[0], ada_boost_classifier[1], X_test)
+# Processing loop
+for dir in test_image_dirs:
+    current_test_dir = os.path.join(training_directory, dir)
+    test_jpg_files = [f for f in os.listdir(current_test_dir) if f.endswith('.jpg') or f.endswith('JPG')]
 
-    for face, prediction in zip(faces, predictions):
-        if prediction == 1:
-            x, y, x2, y2 = face
-            cv2.rectangle(image, (x, y), (x2, y2), (0, 255, 0), 2)
+    for jpg_file in test_jpg_files:
+        image_path = os.path.join(current_test_dir, jpg_file)
+        image = cv2.imread(image_path)
 
-    output_path = os.path.join(output_dir, jpg_file)
-    cv2.imwrite(output_path, image)
+        skin_detected, skin_mask = detect_skin_ycbcr(image)
+        gray_skin = cv2.cvtColor(skin_detected, cv2.COLOR_BGR2GRAY)
+        faces = compute_haar_features(gray_skin)
+
+        X_test = np.array(faces, dtype=np.float32)
+        predictions = adaboost_predict(ada_boost_classifier[0], ada_boost_classifier[1], X_test)
+
+        for face, prediction in zip(faces, predictions):
+            if prediction == 1:
+                x, y, x2, y2 = face
+                cv2.rectangle(image, (x, y), (x2, y2), (0, 255, 0), 2)
+
+        output_path = os.path.join(output_dir, os.path.basename(dir), jpg_file)
+        os.makedirs(os.path.dirname(output_path), exist_ok=True)
+        cv2.imwrite(output_path, image)
 
 print("Processed images saved to the 'output' directory.")
